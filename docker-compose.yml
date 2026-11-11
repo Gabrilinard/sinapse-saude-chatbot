@@ -1,0 +1,18 @@
+# Sobe um MySQL 8 já com o schema.sql e os dados fictícios.
+#   docker compose up -d
+# Para recriar o banco do zero (ex.: atualizar a agenda da semana):
+#   docker compose down -v && docker compose up -d
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: sinapse_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      TZ: America/Fortaleza
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - sinapse_data:/var/lib/mysql
+volumes:
+  sinapse_data:
