@@ -1,0 +1,30 @@
+"""Ícones da biblioteca Google Material Symbols, renderizados nativamente pelo Streamlit."""
+
+MARCA = ":material/stethoscope:"
+LOCALIZACAO = ":material/location_on:"
+ENTRAR = ":material/login:"
+SAIR = ":material/logout:"
+CADASTRAR = ":material/person_add:"
+USUARIO_CONECTADO = ":material/verified_user:"
+NOVA_CONVERSA = ":material/add_comment:"
+SMS = ":material/sms:"
+
+CHAT = ":material/forum:"
+BUSCA = ":material/manage_search:"
+AUDITORIA = ":material/fact_check:"
+ATUALIZAR = ":material/refresh:"
+
+VALOR = ":material/payments:"
+DISTANCIA = ":material/near_me:"
+ENDERECO = ":material/pin_drop:"
+CONVENIOS = ":material/health_and_safety:"
+HORARIOS = ":material/event_available:"
+AGENDAR = ":material/event:"
+
+ALERTA = ":material/warning:"
+INFORMACAO = ":material/info:"
+SUCESSO = ":material/check_circle:"
+ERRO = ":material/error:"
+
+AVATAR_USUARIO = ":material/person:"
+AVATAR_ASSISTENTE = ":material/support_agent:"
