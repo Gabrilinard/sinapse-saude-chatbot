@@ -79,7 +79,6 @@ class Conversa:
 
     @contextmanager
     def tentativa(self) -> Iterator[None]:
-        """Desfaz as mensagens adicionadas se a rodada falhar, para o histórico não ficar quebrado."""
         tamanho_original = len(self.mensagens)
         try:
             yield

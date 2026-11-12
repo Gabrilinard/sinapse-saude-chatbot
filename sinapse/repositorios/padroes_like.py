@@ -4,7 +4,6 @@ TAMANHO_DO_PREFIXO = 6
 
 
 def comeca_com(texto: Optional[str]) -> Optional[str]:
-    """'cardiologista' -> 'cardio%', que casa com 'Cardiologia' (a collation ignora acento e caixa)."""
     return f"{texto.strip()[:TAMANHO_DO_PREFIXO]}%" if texto else None
 
 

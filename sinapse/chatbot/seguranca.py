@@ -11,19 +11,42 @@ RESPOSTA_DE_EMERGENCIA = (
 )
 
 AGUARDANDO_CONFIRMACAO = (
-    "AGUARDANDO CONFIRMAÇÃO: a ação ainda NÃO foi executada. Descreva ao usuário exatamente o que será "
-    "feito (profissional, dia e hora) e pergunte se pode confirmar. Quando ele responder que sim, chame "
-    "esta mesma ferramenta de novo com os mesmos parâmetros."
+    "AGUARDANDO CONFIRMAÇÃO: a ação ainda NÃO foi executada. O sistema perguntou ao usuário se pode {descricao}. "
+    "Se o usuário confirmar, o próprio sistema executa a ação."
+)
+PERGUNTA_DE_CONFIRMACAO = (
+    "Antes de continuar, confirme: posso **{descricao}**?\n\n"
+    "Responda **\"sim\"** para confirmar ou diga o que prefere mudar."
 )
 
 _SINAIS_DE_ALARME = re.compile("|".join([
-    r"dor (forte )?no peito", r"aperto no peito", r"falta de ar", r"nao consigo respirar", r"desmai",
-    r"sangramento (intenso|forte|muito)", r"sangrando muito", r"convuls", r"infarto", r"\bavc\b",
-    r"perdi a forca", r"boca torta",
+    r"\bdor\b(?:\W+\w+){0,4}?\W+(?:no|do|na) peito",
+    r"(?:aperto|pressao|queimacao|pontada)(?:\W+\w+){0,2}?\W+(?:no|do) peito", r"peito apertado",
+    r"falta de ar", r"\bsem ar\b", r"nao consigo respirar", r"dificuldade (?:para|pra|de) respirar",
+    r"respirando com dificuldade", r"sufocando",
+    r"desmai", r"perd\w+ a consciencia", r"inconsciente", r"nao acorda",
+    r"convuls", r"infart", r"\bavc\b", r"derrame",
+    r"boca torta", r"rosto torto", r"fala enrolada", r"perd\w+ a forca",
+    r"sangramento (?:intenso|forte|muito)", r"sangrando muito", r"sangue nao para", r"hemorragia",
 ]))
 
-_RESPOSTA_AFIRMATIVA = re.compile(
-    r"^\s*(sim|s|pode|confirmo|confirma|confirmar|ok|okay|isso|claro|certo|beleza|quero|perfeito|correto)\b")
+_INICIO_AFIRMATIVO = frozenset({"sim", "s", "pode", "confirmo", "confirma", "confirmar", "confirmado", "ok",
+                                "okay", "isso", "claro", "certo", "beleza", "perfeito", "correto", "exato",
+                                "fechado", "quero"})
+_PALAVRAS_DE_CONFIRMACAO = _INICIO_AFIRMATIVO | frozenset({
+    "mesmo", "com", "certeza", "por", "favor", "obrigado", "obrigada", "esta", "ta", "bom",
+    "agendar", "marcar", "cancelar", "remarcar", "exatamente", "tudo", "ser", "assim", "e", "o", "a"})
+_PALAVRAS_QUE_ANULAM = frozenset({"nao", "mas", "porem", "outro", "outra", "prefiro", "trocar",
+                                  "mudar", "espera", "espere", "talvez", "depois", "primeiro", "primeira"})
+_MAXIMO_DE_PALAVRAS = 8
+
+
+def eh_confirmacao(texto: str) -> bool:
+    palavras = re.findall(r"\w+", remover_acentos(texto or ""))
+    return (0 < len(palavras) <= _MAXIMO_DE_PALAVRAS
+            and palavras[0] in _INICIO_AFIRMATIVO
+            and not any(p in _PALAVRAS_QUE_ANULAM for p in palavras)
+            and all(p in _PALAVRAS_DE_CONFIRMACAO for p in palavras))
 
 
 class DetectorDeEmergencia:
@@ -32,28 +55,19 @@ class DetectorDeEmergencia:
 
 
 class PoliticaDeConfirmacao:
-    """Garante no código que agendar, remarcar e cancelar só rodam depois de um "sim" do usuário."""
-
     ACOES_QUE_EXIGEM_CONFIRMACAO = frozenset({"agendar_consulta", "remarcar_consulta", "cancelar_consulta"})
 
-    def autorizar(self, conversa: Conversa, nome: str, argumentos: dict) -> bool:
-        if nome not in self.ACOES_QUE_EXIGEM_CONFIRMACAO:
-            return True
-        acao = AcaoPendente(nome, json.dumps(argumentos, sort_keys=True), conversa.turno)
-        if self._usuario_acabou_de_confirmar(conversa) or self._repetiu_acao_pendente(conversa, acao):
-            conversa.acao_pendente = None
-            return True
-        conversa.acao_pendente = acao
-        return False
+    def exige_confirmacao(self, nome: str) -> bool:
+        return nome in self.ACOES_QUE_EXIGEM_CONFIRMACAO
 
     @staticmethod
-    def _usuario_acabou_de_confirmar(conversa: Conversa) -> bool:
-        pergunta_anterior = conversa.fala_do_modelo_antes_do_usuario()
-        resposta = remover_acentos(conversa.ultima_fala_do_usuario())
-        return "?" in pergunta_anterior and bool(_RESPOSTA_AFIRMATIVA.match(resposta))
+    def registrar(conversa: Conversa, nome: str, argumentos: dict) -> None:
+        conversa.acao_pendente = AcaoPendente(nome, json.dumps(argumentos, sort_keys=True), conversa.turno)
 
     @staticmethod
-    def _repetiu_acao_pendente(conversa: Conversa, acao: AcaoPendente) -> bool:
-        pendente = conversa.acao_pendente
-        return (pendente is not None and pendente.nome == acao.nome
-                and pendente.argumentos == acao.argumentos and pendente.turno < acao.turno)
+    def retomar(conversa: Conversa) -> AcaoPendente | None:
+        pendente, conversa.acao_pendente = conversa.acao_pendente, None
+        if (pendente is not None and pendente.turno == conversa.turno - 1
+                and eh_confirmacao(conversa.ultima_fala_do_usuario())):
+            return pendente
+        return None

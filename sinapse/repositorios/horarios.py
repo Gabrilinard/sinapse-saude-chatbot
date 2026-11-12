@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 
 from sinapse.infraestrutura.banco import Executor
-from sinapse.repositorios.padroes_like import comeca_com
+from sinapse.repositorios.padroes_like import comeca_com, contem
 
 
 class RepositorioHorarios:
@@ -10,8 +10,10 @@ class RepositorioHorarios:
         self._executor = executor
 
     def livres(self, especialidade: Optional[str], profissional_id: Optional[int],
-               inicio: Optional[date], fim: Optional[date], limite: int) -> list[dict]:
+               inicio: Optional[date], fim: Optional[date], limite: int,
+               nome_do_profissional: Optional[str] = None) -> list[dict]:
         especialidade_prefixo = comeca_com(especialidade)
+        nome = contem(nome_do_profissional)
         return self._executor.consultar(
             """SELECT h.id AS horario_id, p.id AS profissional_id, p.nome AS profissional,
                       p.especialidade, p.valor_consulta, h.data_hora
@@ -23,9 +25,11 @@ class RepositorioHorarios:
                  AND h.data_hora <  COALESCE(%s, CURDATE() + INTERVAL 7 DAY) + INTERVAL 1 DAY
                  AND (%s IS NULL OR p.especialidade LIKE %s)
                  AND (%s IS NULL OR p.id = %s)
+                 AND (%s IS NULL OR p.nome LIKE %s)
                ORDER BY h.data_hora
                LIMIT %s""",
-            (inicio, fim, especialidade_prefixo, especialidade_prefixo, profissional_id, profissional_id, limite),
+            (inicio, fim, especialidade_prefixo, especialidade_prefixo, profissional_id, profissional_id,
+             nome, nome, limite),
         )
 
     def criar_grade(self, profissional_id: int, dias: int) -> None:

@@ -36,8 +36,6 @@ def _valores_da_sessao(sessao: SessaoUsuario) -> dict:
 
 
 class CatalogoDeFerramentas:
-    """Decide quais ferramentas o perfil enxerga e monta os argumentos com os dados da sessão."""
-
     def __init__(self, ferramentas: list[DefinicaoDeFerramenta], perfil: Perfil):
         permitidas = FERRAMENTAS_POR_PERFIL[perfil]
         self._ferramentas = {f.nome: f for f in ferramentas if f.nome in permitidas}

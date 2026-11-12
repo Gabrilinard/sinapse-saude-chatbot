@@ -71,5 +71,4 @@ def obter_estado() -> EstadoDaTela:
 
 
 def escapar_cifrao(texto: str) -> str:
-    """Evita que o Streamlit leia 'R$ 100 ... R$ 200' como fórmula LaTeX."""
     return texto.replace("$", "\\$")

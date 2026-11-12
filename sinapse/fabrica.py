@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from sinapse.chatbot.assistente import Assistente
-from sinapse.chatbot.cliente_mcp import ClienteMCP
+from sinapse.chatbot.cliente_mcp import ClienteMCP, ConexaoMCPCompartilhada
 from sinapse.chatbot.gemini import ModeloGemini
 from sinapse.config import carregar_configuracao
 from sinapse.infraestrutura.banco import BancoDeDados
@@ -50,5 +50,10 @@ def criar_servicos() -> Servicos:
     )
 
 
+@lru_cache(maxsize=1)
+def conexao_mcp() -> ConexaoMCPCompartilhada:
+    return ConexaoMCPCompartilhada(ClienteMCP)
+
+
 def criar_assistente() -> Assistente:
-    return Assistente(ModeloGemini(carregar_configuracao().gemini), ClienteMCP)
+    return Assistente(ModeloGemini(carregar_configuracao().gemini), conexao_mcp())

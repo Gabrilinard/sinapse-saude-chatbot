@@ -1,7 +1,8 @@
 from typing import Optional
 
-from sinapse.dominio.erros import (ConsultaInativa, ConsultaNaoEncontrada, HorarioNaoEncontrado,
+from sinapse.dominio.erros import (ConsultaInativa, ConsultaNaoEncontrada, DadoInvalido, HorarioNaoEncontrado,
                                    HorarioOcupado, HorarioPassado)
+from sinapse.dominio.formatacao import formatar_data_hora
 from sinapse.dominio.modelos import STATUS_ATIVOS
 from sinapse.infraestrutura.notificador import Evento, Notificador
 from sinapse.repositorios import Repositorios
@@ -46,8 +47,27 @@ class ServicoDeAgendamento:
             repositorios.consultas.cancelar(consulta_id)
             repositorios.horarios.liberar(consulta["horario_id"])
 
+    def descrever(self, paciente_id: Optional[int], acao: str, argumentos: dict) -> str:
+        exigir_paciente(paciente_id)
+        with self._abrir_transacao() as repositorios:
+            if acao == "agendar_consulta":
+                horario = self._horario_disponivel(repositorios, int(argumentos["horario_id"]))
+                return (f"agendar uma consulta de {horario['especialidade']} com {horario['profissional']} "
+                        f"em {formatar_data_hora(horario['data_hora'])}, no endereço {horario['endereco']}")
+            consulta_id = int(argumentos["consulta_id"])
+            self._consulta_ativa(repositorios, consulta_id, paciente_id)
+            atual = repositorios.consultas.detalhes(consulta_id)
+            descricao_atual = f"a sua consulta com {atual['profissional']} de {formatar_data_hora(atual['data_hora'])}"
+            if acao == "cancelar_consulta":
+                return f"cancelar {descricao_atual}"
+            if acao == "remarcar_consulta":
+                novo = self._horario_disponivel(repositorios, int(argumentos["novo_horario_id"]))
+                return (f"remarcar {descricao_atual} para {formatar_data_hora(novo['data_hora'])}, "
+                        f"com {novo['profissional']}")
+        raise DadoInvalido("Ação desconhecida.")
+
     @staticmethod
-    def _reservar_horario(repositorios: Repositorios, horario_id: int) -> dict:
+    def _horario_disponivel(repositorios: Repositorios, horario_id: int) -> dict:
         horario = repositorios.horarios.travar(horario_id)
         if not horario:
             raise HorarioNaoEncontrado()
@@ -55,6 +75,11 @@ class ServicoDeAgendamento:
             raise HorarioPassado()
         if not horario["livre"]:
             raise HorarioOcupado()
+        return horario
+
+    @classmethod
+    def _reservar_horario(cls, repositorios: Repositorios, horario_id: int) -> dict:
+        horario = cls._horario_disponivel(repositorios, horario_id)
         repositorios.horarios.ocupar(horario_id)
         return horario
 

@@ -1,3 +1,4 @@
+import re
 from dataclasses import replace
 from typing import Optional
 
@@ -8,6 +9,13 @@ from sinapse.servicos import AbrirTransacao
 
 SINONIMOS_DE_PARTICULAR = {"particular", "nenhum", "sem convenio"}
 SEM_CONVENIO = ["apenas particular"]
+_TITULOS = re.compile(r"^\s*(?:dr|dra|doutor|doutora|prof|profa)\.?\s+", re.IGNORECASE)
+
+
+def _nome_sem_titulo(nome: Optional[str]) -> Optional[str]:
+    if not nome or not nome.strip():
+        return None
+    return _TITULOS.sub("", nome.strip()) or None
 
 
 class ServicoDeBusca:
@@ -24,12 +32,15 @@ class ServicoDeBusca:
 
     def horarios_livres(self, especialidade: Optional[str] = None, profissional_id: Optional[int] = None,
                         data_inicio: Optional[str] = None, data_fim: Optional[str] = None,
-                        limite: int = 10) -> list[dict]:
-        if not especialidade and not profissional_id:
-            raise DadoInvalido("Informe a especialidade ou o profissional.")
+                        limite: int = 10, nome_do_profissional: Optional[str] = None) -> list[dict]:
+        nome = _nome_sem_titulo(nome_do_profissional)
+        if nome:
+            profissional_id = None
+        if not especialidade and not profissional_id and not nome:
+            raise DadoInvalido("Informe a especialidade, o nome ou o profissional.")
         with self._abrir_transacao() as repositorios:
-            return repositorios.horarios.livres(especialidade, profissional_id,
-                                                interpretar_data(data_inicio), interpretar_data(data_fim), limite)
+            return repositorios.horarios.livres(especialidade, profissional_id, interpretar_data(data_inicio),
+                                                interpretar_data(data_fim), limite, nome)
 
     def especialidades(self) -> list[str]:
         with self._abrir_transacao() as repositorios:

@@ -20,8 +20,8 @@ class LimiteDeUsoAtingido(ModeloIndisponivel):
 
 
 class ModeloDeLinguagem(Protocol):
-    def gerar(self, instrucoes: str, historico: list[Mensagem],
-              ferramentas: list[DefinicaoDeFerramenta]) -> Mensagem: ...
+    def gerar(self, instrucoes: str, historico: list[Mensagem], ferramentas: list[DefinicaoDeFerramenta],
+              somente_texto: bool = False) -> Mensagem: ...
 
 
 class ProvedorDeFerramentas(Protocol):

@@ -23,6 +23,16 @@ class RepositorioConsultas:
             (consulta_id,),
         )
 
+    def detalhes(self, consulta_id: int) -> Optional[dict]:
+        return self._executor.consultar_um(
+            """SELECT p.nome AS profissional, p.especialidade, h.data_hora
+               FROM consultas c
+               JOIN horarios h      ON h.id = c.horario_id
+               JOIN profissionais p ON p.id = h.profissional_id
+               WHERE c.id = %s""",
+            (consulta_id,),
+        )
+
     def mudar_horario(self, consulta_id: int, novo_horario_id: int) -> None:
         self._executor.executar(
             """UPDATE consultas SET horario_id = %s, status = 'remarcada', lembrete_enviado = 0

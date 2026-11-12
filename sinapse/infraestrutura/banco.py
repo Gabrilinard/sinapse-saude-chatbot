@@ -1,11 +1,14 @@
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Protocol, Sequence
 
 import mysql.connector
+from mysql.connector import pooling
 
 from sinapse.config import ConfiguracaoBanco
 
 FUSO_DE_TERESINA = "-03:00"
+TAMANHO_DO_POOL = 5
 
 
 class Executor(Protocol):
@@ -36,6 +39,8 @@ class _ExecutorDeConexao:
 class BancoDeDados:
     def __init__(self, configuracao: ConfiguracaoBanco):
         self._configuracao = configuracao
+        self._pool: Optional[pooling.MySQLConnectionPool] = None
+        self._trava = threading.Lock()
 
     def testar_conexao(self) -> None:
         self._conectar().close()
@@ -53,16 +58,31 @@ class BancoDeDados:
         finally:
             conexao.close()
 
+    def _obter_pool(self) -> pooling.MySQLConnectionPool:
+        with self._trava:
+            if self._pool is None:
+                self._pool = pooling.MySQLConnectionPool(
+                    pool_name=f"sinapse_{id(self)}",
+                    pool_size=TAMANHO_DO_POOL,
+                    host=self._configuracao.host,
+                    port=self._configuracao.porta,
+                    user=self._configuracao.usuario,
+                    password=self._configuracao.senha,
+                    database=self._configuracao.nome,
+                    charset="utf8mb4",
+                    collation="utf8mb4_0900_ai_ci",
+                )
+            return self._pool
+
     def _conectar(self):
-        conexao = mysql.connector.connect(
-            host=self._configuracao.host,
-            port=self._configuracao.porta,
-            user=self._configuracao.usuario,
-            password=self._configuracao.senha,
-            database=self._configuracao.nome,
-            charset="utf8mb4",
-            collation="utf8mb4_0900_ai_ci",
-        )
+        try:
+            conexao = self._obter_pool().get_connection()
+            conexao.ping(reconnect=True, attempts=1)
+        except pooling.PoolError:
+            conexao = mysql.connector.connect(
+                host=self._configuracao.host, port=self._configuracao.porta, user=self._configuracao.usuario,
+                password=self._configuracao.senha, database=self._configuracao.nome,
+                charset="utf8mb4", collation="utf8mb4_0900_ai_ci")
         cursor = conexao.cursor()
         cursor.execute("SET time_zone = %s", (FUSO_DE_TERESINA,))
         cursor.close()

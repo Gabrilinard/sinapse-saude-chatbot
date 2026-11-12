@@ -1,4 +1,5 @@
 import sys
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -13,14 +14,13 @@ CHAVES_IGNORADAS_NO_SCHEMA = {"title", "default"}
 LIMITE_DE_USO = 429
 SOBRECARGA = 503
 ERROS_TEMPORARIOS = {LIMITE_DE_USO, SOBRECARGA}
+PAUSA_APOS_ERRO_TEMPORARIO = 60
 ASSINATURA_NEUTRA = b"skip_thought_signature_validator"
 SEM_RETENTATIVAS_INTERNAS = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
 
 
 @dataclass(frozen=True)
 class AssinaturaGemini:
-    """O Gemini só aceita a assinatura de raciocínio no mesmo modelo que a gerou."""
-
     modelo: str
     valor: bytes
 
@@ -29,7 +29,6 @@ class AssinaturaGemini:
 
 
 def _adaptar_schema(schema):
-    """Converte o JSON Schema do Pydantic (anyOf com null, title, default) para o formato aceito pelo Gemini."""
     if isinstance(schema, list):
         return [_adaptar_schema(item) for item in schema]
     if not isinstance(schema, dict):
@@ -90,9 +89,23 @@ def _para_mensagem(resposta: types.GenerateContentResponse, modelo: str) -> Mens
     return Mensagem(Papel.MODELO, texto, chamadas)
 
 
-class ModeloGemini:
-    """Usa o modelo principal e, se ele estiver no limite de uso ou sobrecarregado, tenta os modelos reserva."""
+class _PausaDosModelos:
+    def __init__(self):
+        self._ate: dict[str, float] = {}
 
+    def pausar(self, modelo: str) -> None:
+        self._ate[modelo] = time.monotonic() + PAUSA_APOS_ERRO_TEMPORARIO
+
+    def disponiveis(self, modelos: tuple[str, ...]) -> tuple[str, ...]:
+        agora = time.monotonic()
+        livres = tuple(m for m in modelos if self._ate.get(m, 0) <= agora)
+        return livres or modelos
+
+
+_PAUSA = _PausaDosModelos()
+
+
+class ModeloGemini:
     def __init__(self, configuracao: ConfiguracaoGemini):
         self._configuracao = configuracao
         self._cliente = (
@@ -100,18 +113,19 @@ class ModeloGemini:
             if configuracao.chave_api else None
         )
 
-    def gerar(self, instrucoes: str, historico: list[Mensagem],
-              ferramentas: list[DefinicaoDeFerramenta]) -> Mensagem:
+    def gerar(self, instrucoes: str, historico: list[Mensagem], ferramentas: list[DefinicaoDeFerramenta],
+              somente_texto: bool = False) -> Mensagem:
         if self._cliente is None:
             raise ModeloIndisponivel("GEMINI_API_KEY não configurada no .env")
         ultimo_erro = None
-        for modelo in self._configuracao.modelos_em_ordem:
+        for modelo in _PAUSA.disponiveis(self._configuracao.modelos_em_ordem):
             try:
-                return self._gerar_com(modelo, instrucoes, historico, ferramentas)
+                return self._gerar_com(modelo, instrucoes, historico, ferramentas, somente_texto)
             except errors.APIError as erro:
                 if erro.code not in ERROS_TEMPORARIOS:
                     raise ModeloIndisponivel(str(erro)) from erro
                 print(f"[gemini] {modelo} indisponível ({erro.code}), tentando o próximo", file=sys.stderr)
+                _PAUSA.pausar(modelo)
                 ultimo_erro = erro
             except httpx.HTTPError as erro:
                 raise ModeloIndisponivel(str(erro)) from erro
@@ -120,7 +134,8 @@ class ModeloGemini:
         raise ModeloIndisponivel(str(ultimo_erro)) from ultimo_erro
 
     def _gerar_com(self, modelo: str, instrucoes: str, historico: list[Mensagem],
-                   ferramentas: list[DefinicaoDeFerramenta]) -> Mensagem:
+                   ferramentas: list[DefinicaoDeFerramenta], somente_texto: bool) -> Mensagem:
+        modo = "NONE" if somente_texto else "AUTO"
         resposta = self._cliente.models.generate_content(
             model=modelo,
             contents=[_para_conteudo(mensagem, modelo) for mensagem in historico],
@@ -128,6 +143,7 @@ class ModeloGemini:
                 system_instruction=instrucoes,
                 temperature=self._configuracao.temperatura,
                 tools=[types.Tool(function_declarations=[_para_declaracao(f) for f in ferramentas])],
+                tool_config=types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode=modo)),
             ),
         )
         return _para_mensagem(resposta, modelo)

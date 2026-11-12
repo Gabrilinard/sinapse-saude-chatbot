@@ -1,4 +1,3 @@
-"""Plano B (Quadro 10): busca por filtros que funciona mesmo com o LLM fora do ar."""
 import streamlit as st
 
 from sinapse.dominio.erros import ErroDeNegocio

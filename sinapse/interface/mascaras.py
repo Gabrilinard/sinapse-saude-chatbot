@@ -1,7 +1,3 @@
-"""Máscaras de digitação nos campos de texto, aplicadas no navegador enquanto o usuário digita.
-
-Cada regra liga o rótulo do campo (ou o início dele) a um ou mais padrões, em que "0" é um dígito.
-"""
 import json
 
 import streamlit as st

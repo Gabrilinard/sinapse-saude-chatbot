@@ -1,10 +1,3 @@
-"""Servidor MCP da Sinapse Saúde: a camada de serviço exposta como ferramentas.
-
-paciente_id, profissional_id, lat e lng são preenchidos pelo chatbot a partir da sessão
-autenticada; o LLM nunca vê esses parâmetros.
-
-Execução (stdio):  python -m sinapse.mcp.servidor
-"""
 import functools
 from typing import Annotated, Any, Callable, Literal, Optional
 
@@ -48,8 +41,6 @@ def _descrever(argumentos: dict, situacao: str) -> str:
 
 
 def ferramenta(funcao: Callable[..., Any]):
-    """Registra a função como ferramenta MCP, converte o retorno em JSON e audita toda chamada."""
-
     @functools.wraps(funcao)
     def executar(**argumentos) -> str:
         try:
@@ -89,15 +80,20 @@ def buscar_profissionais(
 @ferramenta
 def listar_disponiveis(
     especialidade: Especialidade = None,
+    nome_do_profissional: Annotated[Optional[str], Field(
+        description="Nome do profissional como o usuário falou, ex.: 'Dr. Felipe' ou 'Ana Carvalho'. "
+                    "Prefira este campo quando o usuário citar o profissional pelo nome")] = None,
     profissional_id_escolhido: Annotated[Optional[int], Field(
-        description="Campo 'id' do profissional retornado por buscar_profissionais")] = None,
+        description="Campo 'id' de um profissional que buscar_profissionais JÁ retornou nesta conversa. "
+                    "Nunca deduza ou invente este número")] = None,
     data_inicio: DataInicio = None,
     data_fim: DataFim = None,
     paciente_id: Optional[int] = None,
 ):
-    """Lista os próximos horários livres por especialidade ou por profissional, em ordem de data.
-    Retorna o horario_id de cada horário, usado em agendar_consulta e remarcar_consulta."""
-    horarios = servicos.busca.horarios_livres(especialidade, profissional_id_escolhido, data_inicio, data_fim)
+    """Lista os próximos horários livres por especialidade, por nome do profissional ou por profissional, em
+    ordem de data. Retorna o horario_id de cada horário, usado em agendar_consulta e remarcar_consulta."""
+    horarios = servicos.busca.horarios_livres(especialidade, profissional_id_escolhido, data_inicio, data_fim,
+                                              nome_do_profissional=nome_do_profissional)
     return horarios or "Não há horários livres nesse período."
 
 
@@ -143,6 +139,17 @@ def cancelar_consulta(consulta_id: ConsultaId, paciente_id: Optional[int] = None
     confirmar o cancelamento."""
     servicos.agendamento.cancelar(paciente_id, consulta_id)
     return "Consulta cancelada."
+
+
+@ferramenta
+def descrever_acao(
+    acao: Literal["agendar_consulta", "remarcar_consulta", "cancelar_consulta"],
+    argumentos: dict,
+    paciente_id: Optional[int] = None,
+):
+    """Uso interno do assistente (o modelo não recebe esta ferramenta): valida e descreve, com dados do banco,
+    a ação que será confirmada pelo usuário, sem executá-la."""
+    return {"descricao": servicos.agendamento.descrever(paciente_id, acao, argumentos)}
 
 
 @ferramenta

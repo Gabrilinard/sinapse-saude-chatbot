@@ -26,8 +26,6 @@ class Repositorios:
 
 
 class UnidadeDeTrabalho:
-    """Abre uma transação e entrega os repositórios ligados a ela."""
-
     def __init__(self, banco: BancoDeDados):
         self._banco = banco
 

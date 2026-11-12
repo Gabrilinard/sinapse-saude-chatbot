@@ -1,5 +1,3 @@
-"""Ícones da biblioteca Google Material Symbols, renderizados nativamente pelo Streamlit."""
-
 MARCA = ":material/stethoscope:"
 LOCALIZACAO = ":material/location_on:"
 ENTRAR = ":material/login:"

@@ -18,8 +18,6 @@ class Notificador(Protocol):
 
 
 class NotificadorN8n:
-    """Envia eventos aos webhooks do n8n. Sem URL configurada, apenas registra no stderr."""
-
     def __init__(self, webhooks: dict[str, str]):
         self._webhooks = webhooks
 

@@ -1,4 +1,3 @@
-"""Conversa com o assistente pelo terminal, como visitante:  python -m sinapse.chatbot.terminal"""
 from sinapse.chatbot.conversa import Conversa
 from sinapse.chatbot.instrucoes import TERMO_LGPD
 from sinapse.chatbot.portas import ModeloIndisponivel
